@@ -19,7 +19,7 @@ const AUTO_BASE_URL =
   (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null) ||
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
 const BASE_URL = (process.env.BASE_URL || AUTO_BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
-const REDIRECT_TARGET = 'https://pacifyco.in';
+const REDIRECT_TARGET = 'https://www.pacifyco.in/sitters';
 const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || null;
 
 function requireDashboardAuth(req, res, next) {
