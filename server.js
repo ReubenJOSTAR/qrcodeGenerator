@@ -10,9 +10,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const PORT = process.env.PORT || 3000;
-// Render sets RENDER_EXTERNAL_URL and Vercel sets VERCEL_URL automatically,
-// so QR codes pick up the right public URL on either host with no manual config.
-const AUTO_BASE_URL = process.env.RENDER_EXTERNAL_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
+// Render sets RENDER_EXTERNAL_URL automatically. Vercel sets both
+// VERCEL_PROJECT_PRODUCTION_URL (the stable project domain, e.g. my-app.vercel.app)
+// and VERCEL_URL (unique per deployment) - prefer the stable one so QR codes
+// printed today still work after future redeploys.
+const AUTO_BASE_URL =
+  process.env.RENDER_EXTERNAL_URL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null) ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
 const BASE_URL = (process.env.BASE_URL || AUTO_BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 const REDIRECT_TARGET = 'https://pacifyco.in';
 const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || null;
