@@ -10,9 +10,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const PORT = process.env.PORT || 3000;
-// Render sets RENDER_EXTERNAL_URL automatically on web services, so QR codes
-// pick up the right public URL there without any manual config.
-const BASE_URL = (process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
+// Render sets RENDER_EXTERNAL_URL and Vercel sets VERCEL_URL automatically,
+// so QR codes pick up the right public URL on either host with no manual config.
+const AUTO_BASE_URL = process.env.RENDER_EXTERNAL_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
+const BASE_URL = (process.env.BASE_URL || AUTO_BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 const REDIRECT_TARGET = 'https://pacifyco.in';
 const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || null;
 
@@ -73,8 +74,8 @@ ${body}
 }
 
 // Home: create and list QR campaigns
-app.get('/', (req, res) => {
-  const campaigns = store.listCampaigns().reverse();
+app.get('/', async (req, res) => {
+  const campaigns = (await store.listCampaigns()).reverse();
   const cards = campaigns
     .map((c) => {
       const scanUrl = `${BASE_URL}/r/${c.id}`;
@@ -106,18 +107,18 @@ app.get('/', (req, res) => {
   );
 });
 
-app.post('/campaigns', (req, res) => {
+app.post('/campaigns', async (req, res) => {
   const label = (req.body.label || '').trim();
   if (!label) return res.redirect('/');
   let id = slugify(label);
-  if (store.getCampaign(id)) id = `${id}-${Math.random().toString(36).slice(2, 6)}`;
-  store.createCampaign({ id, label, createdAt: new Date().toISOString() });
+  if (await store.getCampaign(id)) id = `${id}-${Math.random().toString(36).slice(2, 6)}`;
+  await store.createCampaign({ id, label, createdAt: new Date().toISOString() });
   res.redirect('/');
 });
 
 // QR code image for a campaign
 app.get('/qr/:id.png', async (req, res) => {
-  const campaign = store.getCampaign(req.params.id);
+  const campaign = await store.getCampaign(req.params.id);
   if (!campaign) return res.status(404).send('Not found');
   const scanUrl = `${BASE_URL}/r/${campaign.id}`;
   try {
@@ -132,14 +133,14 @@ app.get('/qr/:id.png', async (req, res) => {
 // Scan entry point: log what we can immediately, then ask the browser for
 // precise GPS before forwarding to pacifyco.in.
 app.get('/r/:id', async (req, res) => {
-  const campaign = store.getCampaign(req.params.id);
+  const campaign = await store.getCampaign(req.params.id);
   if (!campaign) return res.status(404).send('Unknown QR code');
 
   const scanId = uuidv4();
   const ip = req.ip;
   const userAgent = req.get('user-agent') || null;
 
-  store.createScan({
+  await store.createScan({
     id: scanId,
     campaignId: campaign.id,
     campaignLabel: campaign.label,
@@ -189,15 +190,15 @@ app.get('/r/:id', async (req, res) => {
   );
 });
 
-app.post('/api/scans/:id/gps', (req, res) => {
+app.post('/api/scans/:id/gps', async (req, res) => {
   const { lat, lon, accuracy } = req.body || {};
   if (typeof lat !== 'number' || typeof lon !== 'number') return res.status(400).json({ ok: false });
-  const updated = store.updateScan(req.params.id, { gps: { lat, lon, accuracy: accuracy ?? null } });
+  const updated = await store.updateScan(req.params.id, { gps: { lat, lon, accuracy: accuracy ?? null } });
   res.json({ ok: !!updated });
 });
 
-app.get('/dashboard', requireDashboardAuth, (req, res) => {
-  const scans = store.listScans();
+app.get('/dashboard', requireDashboardAuth, async (req, res) => {
+  const scans = await store.listScans();
   const rows = scans
     .map((s) => {
       const gps = s.gps ? `<a href="https://maps.google.com/?q=${s.gps.lat},${s.gps.lon}" target="_blank">${s.gps.lat.toFixed(5)}, ${s.gps.lon.toFixed(5)}</a> <span class="muted">(&plusmn;${Math.round(s.gps.accuracy || 0)}m)</span>` : '<span class="muted">not granted</span>';
@@ -229,9 +230,15 @@ app.get('/dashboard', requireDashboardAuth, (req, res) => {
   );
 });
 
-app.listen(PORT, () => {
-  console.log(`QR location tracker running at ${BASE_URL} (listening on port ${PORT})`);
-  if (BASE_URL.includes('localhost')) {
-    console.log('NOTE: QR codes encode this BASE_URL. A QR scanned from a phone needs a public BASE_URL (set the BASE_URL env var) to work outside this machine.');
-  }
-});
+// Vercel imports this file as a serverless function handler (no app.listen);
+// everywhere else, run it as a normal long-lived server.
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`QR location tracker running at ${BASE_URL} (listening on port ${PORT})`);
+    if (BASE_URL.includes('localhost')) {
+      console.log('NOTE: QR codes encode this BASE_URL. A QR scanned from a phone needs a public BASE_URL (set the BASE_URL env var) to work outside this machine.');
+    }
+  });
+}
+
+module.exports = app;
