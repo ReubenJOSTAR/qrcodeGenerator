@@ -1,0 +1,15 @@
+{
+  "name": "qr-location-tracker",
+  "version": "1.0.0",
+  "description": "QR code generator that tracks scan location and redirects to pacifyco.in",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "qrcode": "^1.5.3",
+    "uuid": "^9.0.1"
+  }
+}
